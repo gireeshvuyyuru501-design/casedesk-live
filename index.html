@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CaseDesk | Charge investigation</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#eef2f4;color:#152e34;font:16px system-ui,sans-serif}header{background:#10363d;color:white;padding:28px max(24px,calc((100vw - 1050px)/2))}header small{color:#a9ddd6}h1,h2{margin:0 0 8px}main{max-width:1100px;margin:auto;padding:24px;display:grid;grid-template-columns:minmax(270px,1fr) minmax(0,1.5fr);gap:18px;align-items:start}section{background:white;border:1px solid #d8e3e6;border-radius:14px;padding:22px}section+section{margin-top:16px}h2{font-size:1.1rem}button,select,textarea{font:inherit;padding:9px 12px;border-radius:7px;border:1px solid #8da5ab}button{background:#146052;color:white;cursor:pointer;margin:4px 8px 4px 0}button:disabled{opacity:.55;cursor:wait}select,textarea{width:100%;margin:8px 0}blockquote{margin:12px 0;padding:10px 14px;background:#eaf4f2;border-left:3px solid #258475}li{margin:.5em 0}p{line-height:1.45}#error{color:#9b2626}#review{padding-top:8px}@media(max-width:750px){main{grid-template-columns:1fr}}
+</style>
+<header><h1>CaseDesk</h1><small>Duplicate-charge investigation · Synthetic data</small></header>
+<main>
+<div><section>
+<h2>Customer report</h2>
+<label for="complaint">Complaint</label>
+<textarea id="complaint" maxlength="500" rows="3">I was charged $84.50 twice. Can you fix it?</textarea>
+<small>Use fictional details. With Groq enabled, complaint text is sent to Groq.</small>
+<label for="scenario">Transaction scenario</label>
+<select id="scenario"><option value="pending">Pending and posted</option><option value="posted">Two posted charges</option><option value="ambiguous">Two matching merchants</option></select>
+<button id="run">Investigate</button>
+<p id="error" role="alert" hidden></p>
+</section><section><h2>Workflow trace</h2><ol id="trace"></ol><p id="trace-empty">Run an investigation to see the steps.</p></section></div>
+<div><section aria-live="polite"><h2>Case outcome</h2><p id="message">Select a scenario and run the investigation.</p><div id="options"></div><div id="review"></div></section>
+<section><h2>Transaction evidence</h2><ul id="evidence"></ul><p id="evidence-empty">Evidence will appear after the lookup.</p></section>
+<section id="policy-panel" hidden><h2>Retrieved policy</h2><strong id="policy-title"></strong><p id="policy-text"></p></section></div>
+</main>
+<script>
+const el = id => document.getElementById(id);
+function button(label, action) {
+  const node = document.createElement('button');
+  node.textContent = label;
+  node.onclick = action;
+  return node;
+}
+function list(id, items) {
+  el(id).replaceChildren(...items.map(item => {
+    const row = document.createElement('li');
+    row.textContent = item;
+    return row;
+  }));
+}
+async function request(path, payload, done) {
+  document.querySelectorAll('button, select, textarea').forEach(node => node.disabled = true);
+  el('error').hidden = true;
+  try {
+    const response = await fetch(path, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error);
+    done(data);
+  } catch (error) {
+    el('error').textContent = error.message;
+    el('error').hidden = false;
+  } finally {
+    document.querySelectorAll('button, select, textarea').forEach(node => node.disabled = false);
+  }
+}
+async function investigate(scenario, merchant, message = el('complaint').value) {
+  const trace = [];
+  document.querySelectorAll('button, select, textarea').forEach(node => node.disabled = true);
+  el('error').hidden = true;
+  el('trace-empty').hidden = true;
+  list('trace', trace);
+  list('evidence', []);
+  el('evidence-empty').hidden = false;
+  el('policy-panel').hidden = true;
+  el('options').replaceChildren();
+  el('review').replaceChildren();
+  el('message').textContent = 'Investigation running…';
+  try {
+    const response = await fetch('/investigate', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({scenario, merchant, message})
+    });
+    if (!response.ok) throw new Error((await response.json()).error);
+    const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+    let buffer = '';
+    let completed = false;
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      buffer += value;
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        const event = JSON.parse(line);
+        if (event.kind === 'progress') {
+          trace.push(event.data);
+          list('trace', trace);
+        } else if (event.kind === 'error') {
+          throw new Error(event.data);
+        } else if (event.kind === 'result') {
+          completed = true;
+          render(event.data, scenario, message, trace);
+        }
+      }
+    }
+    if (!completed) throw new Error('Investigation ended before returning a result.');
+  } catch (error) {
+    el('error').textContent = error.message;
+    el('error').hidden = false;
+    el('message').textContent = 'Investigation unavailable.';
+  } finally {
+    document.querySelectorAll('button, select, textarea').forEach(node => node.disabled = false);
+  }
+}
+
+function render(data, scenario, message, trace) {
+    el('message').textContent = data.message;
+    list('evidence', (data.evidence || []).map(row => [row.merchant, row.amount, row.status, row.date, row.reference].join(' · ')));
+    el('evidence-empty').hidden = Boolean(data.evidence?.length);
+    el('policy-panel').hidden = !data.policy;
+    if (data.policy) {
+      el('policy-title').textContent = data.policy.id + ' · ' + data.policy.title;
+      el('policy-text').textContent = data.policy.text;
+    }
+    el('options').replaceChildren(...(data.options || []).map(name => button(name, () => investigate(scenario, name, message))));
+    el('review').replaceChildren();
+    if (data.case_id) {
+      for (const [label, decision] of [['Approve draft','approved'], ['Reject draft','rejected']]) {
+        el('review').append(button(label, () => request('/review', {case_id:data.case_id, decision}, result => {
+          el('review').textContent = 'Analyst decision saved · ' + result.decision;
+          list('trace', [...trace, 'Recorded analyst decision']);
+        })));
+      }
+    }
+}
+el('run').onclick = () => investigate(el('scenario').value);
+</script>
+</html>

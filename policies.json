@@ -1,0 +1,4 @@
+[
+  {"id":"SIM-01","title":"Pending authorizations","text":"A pending authorization is a temporary hold. When a pending authorization appears alongside a posted transaction, explain the pending hold and invite the customer to follow up if both charges post."},
+  {"id":"SIM-02","title":"Posted duplicate review","text":"When two posted transactions appear to be a duplicate, compare their references and prepare a duplicate dispute draft for analyst review. Submit the draft to the simulated approval queue."}
+]
