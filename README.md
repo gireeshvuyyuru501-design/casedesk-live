@@ -1,39 +1,61 @@
-# CaseDesk Live
+﻿# CaseDesk Live
 
-An original duplicate-charge investigation demo with typed complaints, streamed workflow events, and human review. All transaction records and policies are fictional. Use synthetic complaints only.
+CaseDesk Live investigates duplicate card charges using synthetic transactions and fictional policies. It streams investigation steps to the browser and sends possible disputes to a human reviewer.
 
-## Quick start on Windows
+## Quick start
 
-With Python 3 installed, save CaseDesk-Live.zip in Downloads and paste into PowerShell:
+Requires Git and Python 3. The offline demo needs no API key or extra Python packages.
 
 ```powershell
-Set-Location "$env:USERPROFILE\Downloads"
-Expand-Archive .\CaseDesk-Live.zip -DestinationPath .
-Set-Location .\CaseDesk-Live
+git clone https://github.com/gireeshvuyyuru501-design/casedesk-live.git
+cd casedesk-live
 py -3 app.py
 ```
 
-Open http://127.0.0.1:8000. If the Python launcher is unavailable, use `python app.py`. Ctrl+C stops the server.
+Open [CaseDesk Live](http://127.0.0.1:8000) while the server is running. If `py` is unavailable, run `python app.py`.
 
-## Enable the live LLM
+## Try the demo
 
-Stop the server. Set a Groq API key for this PowerShell session and restart:
+Enter **I was charged $84.50 twice.** Run each scenario with the same complaint.
+
+| Scenario | What CaseDesk does |
+| --- | --- |
+| Pending and posted | Explains the authorization hold and cites `SIM-01`. |
+| Two posted charges | Cites `SIM-02` and prepares a draft. Approve or reject it to save your decision locally. |
+| Two matching merchants | Asks which purchase to investigate before continuing. |
+
+## Tools used
+
+| Tool | Role |
+| --- | --- |
+| Python standard library | HTTP server, transaction rules, keyword policy retrieval, and streamed JSON events |
+| SQLite | Local storage for dispute drafts and reviewer decisions |
+| HTML, CSS, and JavaScript | Interactive dashboard and workflow trace |
+| Groq API | Optional LLM extraction of complaint intent, amount, and merchant |
+
+## Project files
+
+- `app.py` runs the server and investigation workflow.
+- `intent.py` handles offline parsing and optional Groq routing.
+- `index.html` contains the browser interface.
+- `policies.json` contains the fictional policies.
+- `evaluate.py` runs seven workflow checks.
+
+## Optional Groq mode
+
+Stop the server, then restart it with a Groq API key. Use only fictional complaints because Groq receives the complaint text in this mode.
 
 ```powershell
-$env:GROQ_API_KEY = Read-Host "Paste your Groq API key"
+$env:GROQ_API_KEY = Read-Host "Enter your Groq API key"
 py -3 app.py
 ```
 
-The workflow trace displays **Groq LLM** when the API classifies the complaint. It sends the complaint to Groq and validates the returned JSON before using it. The default model is llama-3.3-70b-versatile. Set GROQ_MODEL to override it with a compatible JSON-mode model. To return to the offline parser, stop the server, run `Remove-Item Env:GROQ_API_KEY`, and restart it.
+The workflow trace shows **Groq LLM** when model routing is active. Python rules determine the case outcome from the transaction evidence.
 
-## Run the evaluation
+## Evaluation
 
-In a second PowerShell window, work from the extracted project folder and run `py -3 evaluate.py`. Run `py -3 evaluate.py --require-llm` to require live Groq results. The evaluation creates and approves synthetic records in the local SQLite database.
+With the server running, open a second terminal in the project folder and run `py -3 evaluate.py`. To require live Groq routing, run `py -3 evaluate.py --require-llm`. The evaluation saves synthetic cases in the local database.
 
-## Demo and architecture
+## License
 
-1. Enter “I was charged $84.50 twice.” Run **Pending and posted**, then **Two posted charges**. Show how transaction evidence changes the retrieved policy and the outcome.
-2. Run **Two matching merchants** with the same complaint. Select Cedar Market when prompted.
-3. Approve or reject the resulting draft. The decision is saved locally in SQLite.
-
-Groq extracts intent, amount, and merchant. Python branches on the transaction evidence, ranks fictional policy excerpts by keyword overlap, and builds a cited response from templates. A newline-delimited JSON stream displays observable workflow events as they occur. SQLite stores drafts and accepts only one decision per case. The offline parser is designed for common demo phrasing. CaseDesk uses simulated transactions and never submits a real dispute.
+[MIT](LICENSE)
