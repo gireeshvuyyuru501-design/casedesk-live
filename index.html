@@ -2,7 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CaseDesk | Charge investigation</title>
+<title>CaseDesk | Credit Union Voice Assistant</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#eef2f4;color:#152e34;font:16px system-ui,sans-serif}header{background:#10363d;color:white;padding:28px max(24px,calc((100vw - 1050px)/2))}header small{color:#a9ddd6}h1,h2{margin:0 0 8px}main{max-width:1100px;margin:auto;padding:24px;display:grid;grid-template-columns:minmax(270px,1fr) minmax(0,1.5fr);gap:18px;align-items:start}section{background:white;border:1px solid #d8e3e6;border-radius:14px;padding:22px}section+section{margin-top:16px}h2{font-size:1.1rem}button,select,textarea{font:inherit;padding:9px 12px;border-radius:7px;border:1px solid #8da5ab}button{background:#146052;color:white;cursor:pointer;margin:4px 8px 4px 0}button:disabled{opacity:.55;cursor:wait}select,textarea{width:100%;margin:8px 0}blockquote{margin:12px 0;padding:10px 14px;background:#eaf4f2;border-left:3px solid #258475}li{margin:.5em 0}p{line-height:1.45}#error{color:#9b2626}#review{padding-top:8px}@media(max-width:750px){main{grid-template-columns:1fr}}
 </style>
@@ -16,6 +16,9 @@
 <label for="scenario">Transaction scenario</label>
 <select id="scenario"><option value="pending">Pending and posted</option><option value="posted">Two posted charges</option><option value="ambiguous">Two matching merchants</option></select>
 <button id="run">Investigate</button>
+<button id="mic" type="button">Use microphone</button>
+<button id="speak" type="button" hidden>Read result aloud</button>
+<p id="voice-status" role="status"></p>
 <p id="error" role="alert" hidden></p>
 </section><section><h2>Workflow trace</h2><ol id="trace"></ol><p id="trace-empty">Run an investigation to see the steps.</p></section></div>
 <div><section aria-live="polite"><h2>Case outcome</h2><p id="message">Select a scenario and run the investigation.</p><div id="options"></div><div id="review"></div></section>
@@ -97,6 +100,7 @@ async function investigate(scenario, merchant, message = el('complaint').value) 
     el('error').textContent = error.message;
     el('error').hidden = false;
     el('message').textContent = 'Investigation unavailable.';
+    el('speak').hidden = true;
   } finally {
     document.querySelectorAll('button, select, textarea').forEach(node => node.disabled = false);
   }
@@ -104,6 +108,7 @@ async function investigate(scenario, merchant, message = el('complaint').value) 
 
 function render(data, scenario, message, trace) {
     el('message').textContent = data.message;
+    el('speak').hidden = !window.speechSynthesis || !window.SpeechSynthesisUtterance;
     list('evidence', (data.evidence || []).map(row => [row.merchant, row.amount, row.status, row.date, row.reference].join(' · ')));
     el('evidence-empty').hidden = Boolean(data.evidence?.length);
     el('policy-panel').hidden = !data.policy;
@@ -121,6 +126,56 @@ function render(data, scenario, message, trace) {
         })));
       }
     }
+}
+const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (Recognition) {
+  const recognition = new Recognition();
+  recognition.lang = 'en-US';
+  recognition.onstart = () => {
+    el('mic').disabled = true;
+    el('voice-status').textContent = 'Listening. Use fictional details.';
+  };
+  recognition.onresult = event => {
+    el('complaint').value = event.results[0][0].transcript.slice(0, 500);
+    el('voice-status').textContent = 'Review the transcript, then select Investigate.';
+  };
+  recognition.onerror = event => {
+    const messages = {
+      'not-allowed': 'Microphone access was blocked. Allow it in this site’s browser permissions and try again.',
+      'service-not-allowed': 'This browser blocked its speech recognition service.',
+      'audio-capture': 'No microphone audio was captured. Check your selected input device and microphone permissions.',
+      'network': 'The browser could not reach its speech recognition service. Check your connection and try again.',
+      'no-speech': 'No speech was detected. Check your microphone input and try again.',
+      'aborted': 'Speech recognition stopped. Select Use microphone to try again.'
+    };
+    const detail = messages[event.error] ?? 'Speech recognition could not complete.';
+    el('voice-status').textContent = detail + ' (' + event.error + ') You can also type your complaint.';
+  };
+  recognition.onend = () => {
+    el('mic').disabled = el('run').disabled;
+    if (el('voice-status').textContent.startsWith('Listening')) {
+      el('voice-status').textContent = 'No transcript captured. Try again or type your complaint.';
+    }
+  };
+  el('mic').onclick = () => {
+    try {
+      recognition.start();
+    } catch {
+      el('voice-status').textContent = 'Microphone unavailable. Type your complaint to continue.';
+    }
+  };
+} else {
+  el('mic').onclick = () => {
+    el('voice-status').textContent = 'Voice input is unavailable in this browser. You can type your complaint.';
+  };
+}
+if (window.speechSynthesis && window.SpeechSynthesisUtterance) {
+  el('speak').onclick = () => {
+    window.speechSynthesis.cancel();
+    const response = new SpeechSynthesisUtterance(el('message').textContent);
+    response.lang = 'en-US';
+    window.speechSynthesis.speak(response);
+  };
 }
 el('run').onclick = () => investigate(el('scenario').value);
 </script>

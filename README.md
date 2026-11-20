@@ -1,4 +1,4 @@
-﻿# CaseDesk Live
+# CaseDesk Credit Union Voice Assistant
 
 CaseDesk Live investigates duplicate card charges using synthetic transactions and fictional policies. It streams investigation steps to the browser and sends possible disputes to a human reviewer.
 
@@ -23,6 +23,12 @@ Enter **I was charged $84.50 twice.** Run each scenario with the same complaint.
 | Pending and posted | Explains the authorization hold and cites `SIM-01`. |
 | Two posted charges | Cites `SIM-02` and prepares a draft. Approve or reject it to save your decision locally. |
 | Two matching merchants | Asks which purchase to investigate before continuing. |
+
+## Try voice input
+
+Open the demo in a browser that supports Web Speech recognition and choose **Use microphone**. Say “I was charged eighty-four dollars and fifty cents twice.” Review the transcript and adjust the amount to `$84.50` if your browser spells it out. Select **Investigate**, then **Read result aloud** to hear the result when speech synthesis is available. Typed input remains available. Speech recognition may send audio to the browser provider. Use fictional details.
+
+This independent portfolio demo uses simulated records. It was inspired by [public descriptions of credit-union voice assistants](https://www.cutx.org/learn/sam-your-virtual-assistant).
 
 ## Tools used
 
